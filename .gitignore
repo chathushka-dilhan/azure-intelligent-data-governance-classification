@@ -35,3 +35,7 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+
+# Ignore Node.js dependencies
+src/functions/*/node_modules/*
+src/functions/*/package-lock.json
