@@ -1,0 +1,16 @@
+{
+  "name": "event-grid-trigger",
+  "version": "1.0.0",
+  "description": "Azure Function triggered by ADLS Gen2 events to initiate data governance workflow.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@azure/event-hubs": "^5.9.1",
+    "@azure/identity": "^4.10.2",
+    "@azure/storage-blob": "^12.16.0"
+  }
+}

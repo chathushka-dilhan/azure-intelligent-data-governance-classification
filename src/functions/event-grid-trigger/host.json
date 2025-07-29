@@ -1,0 +1,18 @@
+{
+  "version": "2.0",
+  "logging": {
+    "applicationInsights": {
+      "samplingSettings": {
+        "isEnabled": true,
+        "maxTelemetryItemsToExceedThreshold": 5,
+        "excludedTypes": "Request",
+        "includedTypes": "Dependency, Event, Exception, Metric, PageView, PerformanceCounter, Trace",
+        "uriExclusionFilter": "health"
+      }
+    }
+  },
+  "extensionBundle": {
+    "id": "Microsoft.Azure.Functions.ExtensionBundle",
+    "version": "[3.*, 4.0.0)"
+  }
+}

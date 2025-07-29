@@ -1,0 +1,10 @@
+{
+  "scriptFile": "index.js",
+  "bindings": [
+    {
+      "name": "eventGridEvent",
+      "type": "eventGridTrigger",
+      "direction": "in"
+    }
+  ]
+}
