@@ -1,0 +1,18 @@
+{
+  "name": "classification-orchestrator",
+  "version": "1.0.0",
+  "description": "Azure Function to orchestrate data classification using Azure ML, Cognitive Services, and OpenAI.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@azure/event-hubs": "^5.9.1",
+    "@azure/identity": "^4.10.2",
+    "@azure/keyvault-secrets": "^4.7.0",
+    "@azure/storage-blob": "^12.16.0",
+    "axios": "^1.6.2"
+  }
+}

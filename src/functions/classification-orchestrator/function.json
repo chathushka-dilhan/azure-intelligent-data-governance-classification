@@ -1,0 +1,12 @@
+{
+  "scriptFile": "index.js",
+  "bindings": [
+    {
+      "name": "eventHubMessages",
+      "type": "eventHubTrigger",
+      "direction": "in",
+      "eventHubName": "%EVENT_HUB_NAME%",
+      "connection": "EventHubConnection"
+    }
+  ]
+}
