@@ -1,0 +1,17 @@
+{
+  "name": "remediation-trigger",
+  "version": "1.0.0",
+  "description": "Azure Function to trigger automated remediation actions based on data classification.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@azure/arm-policy": "^6.0.0",
+    "@azure/arm-resources": "^6.0.0",
+    "@azure/identity": "^4.10.2",
+    "@azure/storage-blob": "^12.16.0"
+  }
+}
