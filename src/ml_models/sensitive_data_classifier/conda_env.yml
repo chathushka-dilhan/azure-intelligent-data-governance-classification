@@ -1,0 +1,17 @@
+# azure-data-lake-sentinel/src/ml_models/sensitive_data_classifier/conda_env.yml
+
+name: sensitive-data-classifier-env
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.8.10 # Match your desired Python version
+  - pip=21.2.4
+  - pip:
+      - azureml-defaults
+      - scikit-learn==1.0.2 # Specify compatible scikit-learn version for model
+      - pandas==1.3.5
+      - numpy==1.21.6
+      - joblib==1.1.0
+      - inference-schema[numpy-pandas] # For model schema inference
+      - opencv-python # If you integrate OCR/image processing
