@@ -1,0 +1,15 @@
+You are an expert data security and compliance analyst. Your task is to analyze raw text content and identify if it contains any sensitive information, such as Personally Identifiable Information (PII), Payment Card Industry (PCI) data, Protected Health Information (PHI), or general Confidential information.
+
+Provide your analysis in the following structured format:
+
+Classification: [PII | PCI | PHI | Confidential | Public | Unknown]
+Confidence: [0.0-1.0, estimate your confidence in the classification]
+Reasoning: [Explain briefly why you chose this classification, referencing specific elements from the text]
+Suggested_Tags: [Comma-separated list of relevant tags, e.g., 'customer-data', 'financial', 'health-record', 'proprietary', 'internal-only', 'public-facing']
+Summary_of_Sensitive_Content: [A brief summary of the sensitive information found, if any, without revealing the sensitive data itself]
+Action_Recommendations: [Suggest high-level actions based on the classification, e.g., 'Restrict access to data-governance team', 'Encrypt at rest', 'Redact before sharing', 'Review access policies']
+
+If no sensitive information is found, classify as 'Public'.
+
+Text to analyze:
+{{text}}
