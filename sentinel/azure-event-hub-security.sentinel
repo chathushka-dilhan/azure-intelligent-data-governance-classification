@@ -1,0 +1,46 @@
+# Policy to enforce security best practices for Azure Event Hubs.
+
+evaluate = func(tfplan) {
+  all_passed = true
+  messages = []
+
+  # Check for azurerm_eventhub_namespace resources
+  for r_address, r_change in tfplan.resource_changes as address, rc {
+    if rc.type is "azurerm_eventhub_namespace" and (rc.change.actions contains "create" or rc.change.actions contains "update") {
+      eh_namespace = rc.change.after
+
+      # 1. Disable Public Network Access where possible (via network rules)
+      if eh_namespace.public_network_access_enabled is true {
+        # Check if network_rules are restrictive (e.g., default_action is Deny)
+        if eh_namespace.network_rules is undefined or
+           (eh_namespace.network_rules.default_action is not "Deny" and
+            (length(eh_namespace.network_rules.ip_rules) == 0 or
+             eh_namespace.network_rules.ip_rules[0] == "0.0.0.0/0")) {
+          all_passed = false
+          messages = messages + ["Event Hub Namespace Security Violation: Event Hub Namespace '${eh_namespace.name}' has public network access enabled without restrictive network rules."]
+        }
+      }
+
+      # 2. Use standard or premium SKU for production (avoid Basic)
+      if eh_namespace.sku is "Basic" {
+        all_passed = false
+        messages = messages + ["Event Hub Namespace Cost/Availability: Event Hub Namespace '${eh_namespace.name}' is using 'Basic' SKU. Consider 'Standard' or 'Premium' for production workloads and better features."]
+      }
+    }
+  }
+
+  # Check for azurerm_eventhub resources (minimal specific security on hub itself)
+  for r_address, r_change in tfplan.resource_changes as address, rc {
+    if rc.type is "azurerm_eventhub" and (rc.change.actions contains "create" or rc.change.actions contains "update") {
+      event_hub = rc.change.after
+
+      # 1. Enforce message retention (e.g., at least 1 day)
+      if event_hub.message_retention is undefined or event_hub.message_retention < 1 {
+        all_passed = false
+        messages = messages + ["Event Hub Data Retention: Event Hub '${event_hub.name}' should have a message retention period of at least 1 day for audit/retry purposes."]
+      }
+    }
+  }
+
+  return { "all_passed": all_passed, "messages": messages }
+}

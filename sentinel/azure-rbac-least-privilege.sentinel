@@ -1,0 +1,32 @@
+# Policy to enforce principles of least privilege for Managed Identities and Role Assignments.
+# This policy focuses on preventing overly broad permissions.
+
+evaluate = func(tfplan) {
+  all_passed = true
+  messages = []
+
+  # Check for azurerm_role_assignment resources
+  for r_address, r_change in tfplan.resource_changes as address, rc {
+    if rc.type is "azurerm_role_assignment" and (rc.change.actions contains "create" or rc.change.actions contains "update") {
+      role_assignment = rc.change.after
+
+      # 1. Prevent "Contributor" or "Owner" at Subscription Scope (unless explicitly justified)
+      # This is a common violation of least privilege.
+      if role_assignment.scope is string.format("/subscriptions/%s", azure.subscription.id()) {
+        if role_assignment.role_definition_name is "Contributor" or role_assignment.role_definition_name is "Owner" {
+          all_passed = false
+          messages = messages + ["RBAC Least Privilege Violation: Role assignment '${role_assignment.role_definition_name}' granted at subscription scope for principal '${role_assignment.principal_id}'. Use more granular scopes."]
+        }
+      }
+
+      # 2. Prevent custom roles that grant excessive permissions (more complex check)
+      # This would require fetching custom role definitions from Azure and parsing their actions.
+      if role_assignment.role_definition_name is "MyCustomAdminRole" {
+        all_passed = false
+        messages = messages + ["RBAC Least Privilege Violation: Custom role 'MyCustomAdminRole' is being assigned. Ensure its permissions adhere to least privilege."]
+      }
+    }
+  }
+
+  return { "all_passed": all_passed, "messages": messages }
+}

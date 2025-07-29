@@ -1,0 +1,30 @@
+# Policy to enforce security best practices for Azure Cognitive Services accounts (including Azure OpenAI).
+
+evaluate = func(tfplan) {
+  all_passed = true
+  messages = []
+
+  # Check for azurerm_cognitive_account resources
+  for r_address, r_change in tfplan.resource_changes as address, rc {
+    if rc.type is "azurerm_cognitive_account" and (rc.change.actions contains "create" or rc.change.actions contains "update") {
+      cog_account = rc.change.after
+
+      # 1. Enforce Private Endpoint or restrict public network access
+      # Most secure: Private Endpoint. Next best: restrictive network rules.
+      if cog_account.public_network_access_enabled is true {
+        if cog_account.network_acls is undefined or cog_account.network_acls.default_action is not "Deny" {
+          all_passed = false
+          messages = messages + ["Cognitive Services Security Violation: Cognitive Services account '${cog_account.name}' has public network access enabled without restrictive network ACLs (default_action 'Deny' required)."]
+        }
+      }
+
+      # 2. Check for specific allowed Kinds (if organization restricts certain cognitive services)
+      if cog_account.kind is "SomeRestrictedKind" {
+        all_passed = false
+        messages = messages + ["Cognitive Services Compliance: Cognitive Services account '${cog_account.name}' uses kind '${cog_account.kind}', which is not allowed."]
+      }
+    }
+  }
+
+  return { "all_passed": all_passed, "messages": messages }
+}

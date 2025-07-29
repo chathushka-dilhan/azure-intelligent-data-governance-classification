@@ -1,0 +1,53 @@
+# Policy to enforce security best practices for Azure Cosmos DB accounts.
+
+evaluate = func(tfplan) {
+  all_passed = true
+  messages = []
+
+  # Check for azurerm_cosmosdb_account resources
+  for r_address, r_change in tfplan.resource_changes as address, rc {
+    if rc.type is "azurerm_cosmosdb_account" and (rc.change.actions contains "create" or rc.change.actions contains "update") {
+      cosmosdb_account = rc.change.after
+
+      # 1. Disable Public Network Access (recommended for secure deployments)
+      if cosmosdb_account.public_network_access_enabled is not false {
+        all_passed = false
+        messages = messages + ["Cosmos DB Security Violation: Cosmos DB account '${cosmosdb_account.name}' must have public network access disabled."]
+      }
+
+      # 2. Require VNet Integration (if public access is disabled)
+      if cosmosdb_account.public_network_access_enabled is false {
+        if cosmosdb_account.virtual_network_rule is undefined or length(cosmosdb_account.virtual_network_rule) == 0 {
+          all_passed = false
+          messages = messages + ["Cosmos DB Security Violation: Cosmos DB account '${cosmosdb_account.name}' has public network access disabled but no Virtual Network Rule configured for private access."]
+        }
+      }
+
+      # 3. Enforce latest TLS version (implicitly handled by Azure, but can be explicit if needed)
+      # Cosmos DB automatically enforces TLS 1.2 or higher for new connections.
+
+      # 4. Enforce Backup Interval (if using continuous backup, otherwise periodic)
+      if cosmosdb_account.backup is undefined or cosmosdb_account.backup.interval_in_minutes is not 240 { # Example: 4 hours
+        all_passed = false
+        messages = messages + ["Cosmos DB Compliance: Cosmos DB account '${cosmosdb_account.name}' should have backup interval set to 240 minutes (4 hours)."]
+      }
+
+      # 5. Enable Serverless (if applicable and desired for cost)
+      if cosmosdb_account.capabilities is not undefined {
+        serverless_enabled = false
+        for cap in cosmosdb_account.capabilities {
+          if cap.name == "EnableServerless" {
+            serverless_enabled = true
+          }
+        }
+        
+        if not serverless_enabled {
+          all_passed = false
+          messages = messages + ["Cosmos DB Cost Optimization: Cosmos DB account '${cosmosdb_account.name}' should enable Serverless capability for cost optimization if workload allows."]
+        }
+      }
+    }
+  }
+
+  return { "all_passed": all_passed, "messages": messages }
+}

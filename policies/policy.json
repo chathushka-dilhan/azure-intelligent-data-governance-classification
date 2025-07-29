@@ -1,0 +1,29 @@
+{
+  "mode": "Indexed",
+  "displayName": "Enforce 'DataClassification' Tag (AuditIfNotExists)",
+  "description": "Audits resources if they do not have a 'DataClassification' tag. Used to track data classification after discovery.",
+  "parameters": {
+    "classificationTagValue": {
+      "type": "String",
+      "metadata": {
+        "displayName": "Data Classification Tag Value",
+        "description": "The expected value for the 'DataClassification' tag (e.g., PII, Confidential, Public, PHI)."
+      },
+      "defaultValue": "Unknown"
+    }
+  },
+  "policyRule": {
+    "if": {
+      "field": "tags['DataClassification']",
+      "exists": "false"
+    },
+    "then": {
+      "effect": "audit"
+    }
+  },
+  "metadata": {
+    "category": "Data Governance",
+    "version": "1.0.0",
+    "source": "azure-data-lake-sentinel"
+  }
+}

@@ -1,0 +1,46 @@
+# Policy to enforce security best practices for Azure Storage Accounts (ADLS Gen2, Blob, etc.).
+
+evaluate = func(tfplan) {
+  all_passed = true
+  messages = []
+
+  # Check for azurerm_storage_account resources
+  for r_address, r_change in tfplan.resource_changes as address, rc {
+    if rc.type is "azurerm_storage_account" and (rc.change.actions contains "create" or rc.change.actions contains "update") {
+      storage_account = rc.change.after
+
+      # 1. Enforce HTTPS only
+      if storage_account.https_only is not true {
+        all_passed = false
+        messages = messages + ["Storage Account Security Violation: Storage account '${storage_account.name}' must enforce HTTPS only."]
+      }
+
+      # 2. Enforce Minimum TLS Version 1.2
+      if storage_account.min_tls_version is not "TLS1_2" {
+        all_passed = false
+        messages = messages + ["Storage Account Security Violation: Storage account '${storage_account.name}' must enforce minimum TLS version 1.2."]
+      }
+
+      # 3. Disable Public Network Access (unless explicitly justified and controlled by IP rules/VNet rules)
+      # This checks the default public access. For private endpoints, this would be disabled.
+      if storage_account.public_network_access_enabled is true {
+        # Check if network_rules are restrictive
+        if storage_account.network_rules is undefined or 
+           (storage_account.network_rules.default_action is not "Deny" and 
+            (length(storage_account.network_rules.ip_rules) == 0 or 
+             storage_account.network_rules.ip_rules[0] == "0.0.0.0/0")) {
+          all_passed = false
+          messages = messages + ["Storage Account Security Violation: Storage account '${storage_account.name}' has public network access enabled without restrictive network rules (default_action 'Deny' and specific IP/VNet rules required)."]
+        }
+      }
+
+      # 4. Require Hierarchical Namespace (HNS) for ADLS Gen2
+      if storage_account.is_hns_enabled is false {
+        all_passed = false
+        messages = messages + ["Storage Account Configuration: Storage account '${storage_account.name}' should have Hierarchical Namespace (ADLS Gen2) enabled for data lake usage."]
+      }
+    }
+  }
+
+  return { "all_passed": all_passed, "messages": messages }
+}

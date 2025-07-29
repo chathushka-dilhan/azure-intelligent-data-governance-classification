@@ -1,0 +1,40 @@
+# Policy to enforce consistent naming conventions for Azure resources.
+
+param naming_patterns
+
+evaluate = func(tfplan, naming_patterns) {
+  all_passed = true
+  messages = []
+
+  # Define resource types to check and their corresponding pattern keys
+  resource_checks = {
+    "azurerm_resource_group": "resource_group",
+    "azurerm_storage_account": "storage_account",
+    "azurerm_virtual_network": "virtual_network",
+    "azurerm_subnet": "subnet",
+    "azurerm_function_app": "function_app",
+    "azurerm_eventhub_namespace": "eventhub_namespace",
+    "azurerm_eventhub": "eventhub",
+    "azurerm_cosmosdb_account": "cosmosdb_account",
+    "azurerm_synapse_workspace": "synapse_workspace",
+    "azurerm_machine_learning_workspace": "machine_learning_workspace",
+    "azurerm_cognitive_account": "cognitive_account",
+    "azurerm_logic_app_workflow": "logic_app_workflow"
+    # Add other resource types as needed
+  }
+
+  for r_type, pattern_key in resource_checks {
+    for r in tfplan.resource_changes as address, rc {
+      if rc.type is r_type and rc.change.actions is "create" and rc.change.after.name is not undefined {
+        name = rc.change.after.name
+        pattern = naming_patterns[pattern_key]
+        if not regex.match(pattern, name) {
+          all_passed = false
+          messages = messages + ["Naming Convention Violation: ${r_type} '${name}' does not match pattern '${pattern}'."]
+        }
+      }
+    }
+  }
+
+  return { "all_passed": all_passed, "messages": messages }
+}

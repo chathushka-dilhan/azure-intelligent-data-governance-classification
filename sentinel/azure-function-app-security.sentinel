@@ -1,0 +1,51 @@
+# Policy to enforce security best practices for Azure Function Apps.
+
+param allowed_runtimes
+
+evaluate = func(tfplan, allowed_runtimes) {
+  all_passed = true
+  messages = []
+
+  # Check for azurerm_function_app resources
+  for r_address, r_change in tfplan.resource_changes as address, rc {
+    if rc.type is "azurerm_function_app" and (rc.change.actions contains "create" or rc.change.actions contains "update") {
+      func_app = rc.change.after
+
+      # 1. Enforce HTTPS only
+      if func_app.https_only is not true {
+        all_passed = false
+        messages = messages + ["Function App Security Violation: Function App '${func_app.name}' must enforce HTTPS only."]
+      }
+
+      # 2. Enforce VNet Integration (recommended for secure access to other services)
+      if func_app.site_config is undefined or func_app.site_config.ip_restriction is undefined or length(func_app.site_config.ip_restriction) == 0 {
+        all_passed = false
+        messages = messages + ["Function App Security Violation: Function App '${func_app.name}' should enable VNet integration with IP restrictions for secure communication."]
+      } else {
+        # If VNet integration is used, ensure it's on a proper subnet.
+        # This check is more complex and might involve cross-referencing subnet properties.
+      }
+
+      # 3. Enforce System-Assigned Managed Identity
+      if func_app.identity is undefined or func_app.identity.type is not "SystemAssigned" {
+        all_passed = false
+        messages = messages + ["Function App Security Violation: Function App '${func_app.name}' must use a System-Assigned Managed Identity for secure access to other Azure services."]
+      }
+
+      # 4. Restrict Runtime Version (e.g., to specific Node.js or Python versions)
+      # Assumes 'FUNCTIONS_WORKER_RUNTIME' is in app_settings
+      if func_app.app_settings.FUNCTIONS_WORKER_RUNTIME is not undefined and not (func_app.app_settings.FUNCTIONS_WORKER_RUNTIME in allowed_runtimes) {
+        all_passed = false
+        messages = messages + ["Function App Compliance: Function App '${func_app.name}' uses worker runtime '${func_app.app_settings.FUNCTIONS_WORKER_RUNTIME}', which is not in the allowed list: ${allowed_runtimes}."]
+      }
+
+      # 5. WEBSITE_RUN_FROM_PACKAGE enabled (best practice)
+      if func_app.app_settings.WEBSITE_RUN_FROM_PACKAGE is undefined or func_app.app_settings.WEBSITE_RUN_FROM_PACKAGE is not "1" {
+         all_passed = false
+         messages = messages + ["Function App Best Practice: Function App '${func_app.name}' should use WEBSITE_RUN_FROM_PACKAGE deployment method."]
+      }
+    }
+  }
+
+  return { "all_passed": all_passed, "messages": messages }
+}

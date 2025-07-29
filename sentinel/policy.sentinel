@@ -1,0 +1,156 @@
+# This is the main policy file that imports and evaluates other specific policies.
+# It defines the overall governance framework for the Azure Data Lake Sentinel solution.
+
+# Import Terraform plan functions
+import "tfplan/v2" as tfplan
+import "tfstate/v2" as tfstate
+import "azure" as azure
+
+# --- Policy Parameters ---
+# Define parameters that can be overridden at the Sentinel enforcement point.
+param required_tags = [
+  "Project",
+  "Environment",
+  "Owner",
+  "DataClassification" # Enforce this tag on relevant resources
+]
+
+param allowed_locations = [
+  "eastus",
+  "eastus2",
+  "centralus",
+  "westus2",
+  "uksouth",
+  "westeurope"
+]
+
+param allowed_vm_sizes = [
+  "Standard_DS2_v2",
+  "Standard_DS3_v2",
+  "Standard_DS4_v2",
+  "Standard_D2s_v3",
+  "Standard_D4s_v3",
+  "Standard_E4s_v3",
+  "Standard_F4s_v2",
+  "Standard_A2_v2" # Example for smaller/cheaper VMs
+]
+
+param allowed_function_app_runtimes = [
+  "node",
+  "python"
+]
+
+# Define naming convention patterns
+param naming_patterns = {
+  "resource_group"       = "^rg-[a-z0-9-]+$"
+  "storage_account"      = "^st[a-z0-9]{10,20}$" # st<10-20 lowercase alphanumeric>
+  "virtual_network"      = "^vnet-[a-z0-9-]+$"
+  "subnet"               = "^snet-[a-z0-9-]+$"
+  "function_app"         = "^func-[a-z0-9-]+$"
+  "eventhub_namespace"   = "^ehns-[a-z0-9-]+$"
+  "eventhub"             = "^eh-[a-z0-9-]+$"
+  "cosmosdb_account"     = "^cosmos[a-z0-9-]+$"
+  "synapse_workspace"    = "^syn-[a-z0-9-]+$"
+  "machine_learning_workspace" = "^aml-[a-z0-9-]+$"
+  "cognitive_account"    = "^cogsvc-[a-z0-9-]+$"
+  "logic_app_workflow"   = "^logic-[a-z0-9-]+$"
+}
+
+# --- Import and Evaluate Specific Policies ---
+
+# Evaluate all network security group rules
+import "aws-nsg-best-practices.sentinel" as nsg_policy
+nsg_policy_result = nsg_policy.evaluate(tfplan)
+
+# Evaluate Azure Storage Account security
+import "azure-storage-security.sentinel" as storage_policy
+storage_policy_result = storage_policy.evaluate(tfplan)
+
+# Evaluate Azure Cosmos DB security
+import "azure-cosmosdb-security.sentinel" as cosmosdb_policy
+cosmosdb_policy_result = cosmosdb_policy.evaluate(tfplan)
+
+# Evaluate Azure Function App security
+import "azure-function-app-security.sentinel" as funcapp_policy
+funcapp_policy_result = funcapp_policy.evaluate(tfplan, allowed_function_app_runtimes)
+
+# Evaluate Azure Event Hub security
+import "azure-event-hub-security.sentinel" as eventhub_policy
+eventhub_policy_result = eventhub_policy.evaluate(tfplan)
+
+# Evaluate Azure Synapse Analytics security
+import "azure-synapse-security.sentinel" as synapse_policy
+synapse_policy_result = synapse_policy.evaluate(tfplan)
+
+# Evaluate Azure Machine Learning security
+import "azure-machine-learning-security.sentinel" as aml_policy
+aml_policy_result = aml_policy.evaluate(tfplan, allowed_vm_sizes)
+
+# Evaluate Azure Cognitive Services (and OpenAI) security
+import "azure-cognitive-services-security.sentinel" as cogsvc_policy
+cogsvc_policy_result = cogsvc_policy.evaluate(tfplan)
+
+# Evaluate general RBAC (Managed Identity) least privilege principles
+import "azure-rbac-least-privilege.sentinel" as rbac_policy
+rbac_policy_result = rbac_policy.evaluate(tfplan)
+
+# Evaluate naming conventions
+import "azure-resource-naming.sentinel" as naming_policy
+naming_policy_result = naming_policy.evaluate(tfplan, naming_patterns)
+
+# Evaluate mandatory tagging
+import "azure-resource-tagging.sentinel" as tagging_policy
+tagging_policy_result = tagging_policy.evaluate(tfplan, required_tags, allowed_locations)
+
+
+# --- Policy Enforcement Logic ---
+# The main policy decision based on the evaluation of sub-policies.
+policy_violations = []
+
+if not nsg_policy_result.all_passed:
+  policy_violations = policy_violations + nsg_policy_result.messages
+
+if not storage_policy_result.all_passed:
+  policy_violations = policy_violations + storage_policy_result.messages
+
+if not cosmosdb_policy_result.all_passed:
+  policy_violations = policy_violations + cosmosdb_policy_result.messages
+
+if not funcapp_policy_result.all_passed:
+  policy_violations = policy_violations + funcapp_policy_result.messages
+
+if not eventhub_policy_result.all_passed:
+  policy_violations = policy_violations + eventhub_policy_result.messages
+
+if not synapse_policy_result.all_passed:
+  policy_violations = policy_violations + synapse_policy_result.messages
+
+if not aml_policy_result.all_passed:
+  policy_violations = policy_violations + aml_policy_result.messages
+
+if not cogsvc_policy_result.all_passed:
+  policy_violations = policy_violations + cogsvc_policy_result.messages
+
+if not rbac_policy_result.all_passed:
+  policy_violations = policy_violations + rbac_policy_result.messages
+
+if not naming_policy_result.all_passed:
+  policy_violations = policy_violations + naming_policy_result.messages
+
+if not tagging_policy_result.all_passed:
+  policy_violations = policy_violations + tagging_policy_result.messages
+
+
+# Set the overall policy result
+main_policy_result = length(policy_violations) == 0
+
+# If any violations exist, print them
+if not main_policy_result {
+  print("Sentinel Policy Violations Detected:")
+  for msg in policy_violations {
+    print("- " + msg)
+  }
+}
+
+# Define the policy outcome (true for pass, false for fail)
+main = main_policy_result

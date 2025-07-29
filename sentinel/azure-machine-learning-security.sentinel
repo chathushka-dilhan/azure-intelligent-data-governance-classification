@@ -1,0 +1,55 @@
+# Policy to enforce security best practices for Azure Machine Learning Workspaces and Compute.
+
+param allowed_vm_sizes # From main policy.sentinel
+
+evaluate = func(tfplan, allowed_vm_sizes) {
+  all_passed = true
+  messages = []
+
+  # Check for azurerm_machine_learning_workspace resources
+  for r_address, r_change in tfplan.resource_changes as address, rc {
+    if rc.type is "azurerm_machine_learning_workspace" and (rc.change.actions contains "create" or rc.change.actions contains "update") {
+      aml_workspace = rc.change.after
+    }
+  }
+
+  # Check for azurerm_machine_learning_compute_instance (Notebook VM)
+  for r_address, r_change in tfplan.resource_changes as address, rc {
+    if rc.type is "azurerm_machine_learning_compute_instance" and (rc.change.actions contains "create" or rc.change.actions contains "update") {
+      compute_instance = rc.change.after
+
+      # 1. Enforce VNet Integration for Compute Instance
+      if compute_instance.subnet_resource_id is undefined or compute_instance.subnet_resource_id == "" {
+        all_passed = false
+        messages = messages + ["AML Compute Instance Security Violation: ML Compute Instance '${compute_instance.name}' must be deployed into a VNet subnet for secure access."]
+      }
+
+      # 2. Restrict VM Size for Cost/Compliance
+      if not (compute_instance.virtual_machine_size in allowed_vm_sizes) {
+        all_passed = false
+        messages = messages + ["AML Compute Instance Compliance: ML Compute Instance '${compute_instance.name}' uses VM size '${compute_instance.virtual_machine_size}', which is not in the allowed list: ${allowed_vm_sizes}."]
+      }
+    }
+  }
+
+  # Check for azurerm_kubernetes_cluster (AKS for AML Endpoints)
+  for r_address, r_change in tfplan.resource_changes as address, rc {
+    if rc.type is "azurerm_kubernetes_cluster" and (rc.change.actions contains "create" or rc.change.actions contains "update") {
+      aks_cluster = rc.change.after
+
+      # 1. Enforce AKS to be deployed into VNet subnet
+      if aks_cluster.default_node_pool.0.vnet_subnet_id is undefined or aks_cluster.default_node_pool.0.vnet_subnet_id == "" {
+        all_passed = false
+        messages = messages + ["AKS Cluster Security Violation: AKS Cluster '${aks_cluster.name}' for AML inference must be deployed into a VNet subnet."]
+      }
+
+      # 2. Enforce System-Assigned Managed Identity for AKS
+      if aks_cluster.identity is undefined or aks_cluster.identity.type is not "SystemAssigned" {
+        all_passed = false
+        messages = messages + ["AKS Cluster Security Violation: AKS Cluster '${aks_cluster.name}' must use a System-Assigned Managed Identity."]
+      }
+    }
+  }
+
+  return { "all_passed": all_passed, "messages": messages }
+}

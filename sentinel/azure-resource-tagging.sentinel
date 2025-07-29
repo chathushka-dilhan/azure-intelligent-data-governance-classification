@@ -1,0 +1,41 @@
+# Policy to enforce mandatory tags and allowed locations for Azure resources.
+
+param required_tags
+param allowed_locations
+
+evaluate = func(tfplan, required_tags, allowed_locations) {
+  all_passed = true
+  messages = []
+
+  # Iterate over all resource changes
+  for r_address, r_change in tfplan.resource_changes {
+    # Check only 'create' and 'update' actions
+    if r_change.change.actions contains "create" or r_change.change.actions contains "update" {
+      resource = r_change.change.after # The state of the resource after the change
+
+      # --- Mandatory Tagging Check ---
+      if resource.tags is not undefined {
+        for tag in required_tags {
+          if resource.tags[tag] is undefined or resource.tags[tag] == "" {
+            all_passed = false
+            messages = messages + ["Mandatory Tagging Violation: Resource '${resource.name}' (${r_change.type}) is missing required tag '${tag}'."]
+          }
+        }
+      } else {
+        # If no tags block exists, it's missing all tags
+        all_passed = false
+        messages = messages + ["Mandatory Tagging Violation: Resource '${resource.name}' (${r_change.type}) has no tags defined. Required tags: ${required_tags}."]
+      }
+
+      # --- Allowed Locations Check ---
+      if resource.location is not undefined {
+        if not (resource.location in allowed_locations) {
+          all_passed = false
+          messages = messages + ["Allowed Locations Violation: Resource '${resource.name}' (${r_change.type}) is in location '${resource.location}', which is not in the allowed list: ${allowed_locations}."]
+        }
+      }
+    }
+  }
+
+  return { "all_passed": all_passed, "messages": messages }
+}

@@ -1,0 +1,35 @@
+# Policy to enforce security best practices for Azure Synapse Analytics workspaces.
+
+evaluate = func(tfplan) {
+  all_passed = true
+  messages = []
+
+  # Check for azurerm_synapse_workspace resources
+  for r_address, r_change in tfplan.resource_changes as address, rc {
+    if rc.type is "azurerm_synapse_workspace" and (rc.change.actions contains "create" or rc.change.actions contains "update") {
+      synapse_workspace = rc.change.after
+
+      # 1. Enforce Managed Virtual Network
+      if synapse_workspace.managed_virtual_network_enabled is not true {
+        all_passed = false
+        messages = messages + ["Synapse Security Violation: Synapse Workspace '${synapse_workspace.name}' must have Managed Virtual Network enabled for enhanced security."]
+      }
+
+      # 2. Disable Public Network Access (if Managed VNet is enabled)
+      # For Synapse, 'public_network_access_enabled' refers to the workspace's public endpoint.
+      # If Managed VNet is enabled, private endpoints are the preferred way to access.
+      if synapse_workspace.managed_virtual_network_enabled is true and synapse_workspace.public_network_access_enabled is true {
+        all_passed = false
+        messages = messages + ["Synapse Security Warning: Synapse Workspace '${synapse_workspace.name}' has Managed Virtual Network enabled but still allows public network access. Consider disabling public access and using private endpoints."]
+      }
+
+      # 3. Enforce SQL Administrator Login (basic check, strong password would be ideal)
+      if synapse_workspace.sql_administrator_login is undefined or synapse_workspace.sql_administrator_login == "" {
+        all_passed = false
+        messages = messages + ["Synapse Security Violation: Synapse Workspace '${synapse_workspace.name}' must have an SQL Administrator Login defined."]
+      }
+    }
+  }
+
+  return { "all_passed": all_passed, "messages": messages }
+}

@@ -1,0 +1,72 @@
+# Policy to enforce security best practices for Network Security Groups (NSGs).
+
+evaluate = func(tfplan) {
+  all_passed = true
+  messages = []
+
+  # Check for azurerm_network_security_rule resources
+  for r_address, r_change in tfplan.resource_changes as address, rc {
+    if rc.type is "azurerm_network_security_rule" and (rc.change.actions contains "create" or rc.change.actions contains "update") {
+      nsg_rule = rc.change.after
+
+      # 1. Disallow 'Allow' rule with 'Any' or '0.0.0.0/0' source/destination for critical ports
+      critical_ports = ["22", "3389", "80", "443"] # SSH, RDP, HTTP, HTTPS
+
+      if nsg_rule.direction is "Inbound" and nsg_rule.access is "Allow" {
+        # Check source
+        if length(nsg_rule.source_address_prefixes) > 0 and (nsg_rule.source_address_prefixes[0] == "*" or nsg_rule.source_address_prefixes[0] == "0.0.0.0/0") {
+          if nsg_rule.protocol is "*" or (length(nsg_rule.destination_port_ranges) > 0 and (nsg_rule.destination_port_ranges[0] == "*" or any(critical_ports, rule_port_range_contains_critical_port(nsg_rule.destination_port_ranges)))) {
+            all_passed = false
+            messages = messages + ["NSG Security Violation: Inbound Allow rule '${nsg_rule.name}' on NSG '${nsg_rule.network_security_group_name}' allows 'Any' source IP to critical ports/all ports."]
+          }
+        }
+      }
+
+      # 2. Prefer specific source/destination ranges over 'Any'
+      if nsg_rule.source_address_prefixes is not undefined and length(nsg_rule.source_address_prefixes) > 0 and nsg_rule.source_address_prefixes[0] == "*" {
+        all_passed = false
+        messages = messages + ["NSG Best Practice: NSG rule '${nsg_rule.name}' on NSG '${nsg_rule.network_security_group_name}' uses '*' as source address prefix. Prefer specific CIDR ranges or Service Tags."]
+      }
+      if nsg_rule.destination_address_prefixes is not undefined and length(nsg_rule.destination_address_prefixes) > 0 and nsg_rule.destination_address_prefixes[0] == "*" {
+        all_passed = false
+        messages = messages + ["NSG Best Practice: NSG rule '${nsg_rule.name}' on NSG '${nsg_rule.network_security_group_name}' uses '*' as destination address prefix. Prefer specific CIDR ranges or Service Tags."]
+      }
+
+      # 3. Avoid allowing all protocols ("*") unless strictly necessary
+      if nsg_rule.protocol is "*" and (nsg_rule.access is "Allow") {
+        all_passed = false
+        messages = messages + ["NSG Best Practice: NSG rule '${nsg_rule.name}' on NSG '${nsg_rule.network_security_group_name}' allows all protocols ('*'). Specify required protocols (e.g., 'Tcp', 'Udp')."]
+      }
+
+      # 4. Check for high priority rules that are too permissive
+      if nsg_rule.priority < 1000 and nsg_rule.access is "Allow" and (nsg_rule.source_address_prefixes[0] == "*" or nsg_rule.destination_port_ranges[0] == "*") {
+        all_passed = false
+        messages = messages + ["NSG Security Warning: High priority Allow rule '${nsg_rule.name}' on NSG '${nsg_rule.network_security_group_name}' is overly permissive (high priority, wildcard source/port)."]
+      }
+    }
+  }
+
+  return { "all_passed": all_passed, "messages": messages }
+}
+
+# Helper function to check if a port range contains any critical port
+rule_port_range_contains_critical_port = func(port_ranges, critical_ports) {
+  for range in port_ranges {
+    if range contains "-" {
+      parts = string.split(range, "-")
+      start = int(parts[0])
+      end = int(parts[1])
+      for p in critical_ports {
+        cp = int(p)
+        if cp >= start and cp <= end {
+          return true
+        }
+      }
+    } else {
+      if range in critical_ports {
+        return true
+      }
+    }
+  }
+  return false
+}
